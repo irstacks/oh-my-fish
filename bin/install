@@ -104,7 +104,7 @@ end
 
 # Add an exit hook to display a message if the installer aborts or errors.
 function on_exit -p %self
-  if test $status -ne 0
+  if test $status -ne 0 -a $status -ne 2
     echo -e "\nOh My Fish installation failed.\n\nIf you think that it's a bug, please open an\nissue with the complete installation log here:\n\nhttp://github.com/oh-my-fish/oh-my-fish/issues"
   end
 end
@@ -177,6 +177,11 @@ function install_offline
   # At this point, path must be a directory.
   if not test -d "$OFFLINE_PATH"
     abort "$OFFLINE_PATH is not a directory"
+  end
+
+  # Make sure the given path is actually the OMF source.
+  if not is_install_dir "$OFFLINE_PATH"
+    abort "$OFFLINE_PATH is not a valid local installation source"
   end
 
   # Copy the source into the install location.
@@ -304,6 +309,10 @@ function uninstall_omf
     and command rm "$vendor_config_file"
     or abort "Failed to remove bootstrap file"
 
+  # Restore backed-up files
+  restore_backup_file "$FISH_CONFIG/config.fish"
+  restore_backup_file "$FISH_CONFIG/functions/fish_prompt.fish"
+
   say "Uninstall complete"
 end
 
@@ -327,6 +336,22 @@ function backup_file -a file_path
   end
 
   return 0
+end
+
+
+# Restores a backed-up file to its original location.
+function restore_backup_file -a file_path
+  set -l path (command dirname $file_path)
+  set -l file (command basename $file_path)
+  set -l name (echo $file | cut -d. -f1)
+  set -l backup_file_list $path/$name.*.copy
+  set -l backup_file_path (echo $backup_file_list | command tr ' ' '\n' | command sort -r | command head -1)
+
+  if test -e "$backup_file_path"
+    say "Restoring backup file to $path/$file"
+    command mv "$backup_file_path" "$path/$file" ^/dev/null
+      or abort "Could not restore backup $backup_file_path"
+  end
 end
 
 
@@ -379,7 +404,7 @@ end
 
 # Assert that all tools we need are available.
 function assert_cmds
-  set -l cmds basename cp cut date dirname fish fold git mkdir mv sed sort tar
+  set -l cmds basename cp cut date dirname fish fold git head mkdir mv rm sed sort tar tr
 
   for cmd in $cmds
     type -f -q $cmd
@@ -422,14 +447,18 @@ end
 
 
 # Aborts the installer and displays an error.
-function abort -a message
+function abort -a message code
+  if test -z "$code"
+    set code 1
+  end
+
   if test -n "$message"
     printf "%sInstall aborted: $message%s\n" (set_color red ^ /dev/null) (set_color normal ^ /dev/null) >&2
   else
     printf "%sInstall aborted%s\n" (set_color red ^ /dev/null) (set_color normal ^ /dev/null) >&2
   end
 
-  exit 2
+  exit $code
 end
 
 
@@ -443,7 +472,7 @@ function confirm -a message
   set -q NONINTERACTIVE
     and return 1
 
-  printf "%s$message (y/n): %s" (set_color yellow ^ /dev/null) (set_color normal ^ /dev/null)
+  printf "%s$message (y/N): %s" (set_color yellow ^ /dev/null) (set_color normal ^ /dev/null)
   read -l answer < /dev/tty
     or abort "Failed to read from tty"
 
@@ -454,7 +483,7 @@ end
 # Asks the user for a confirmation or aborts.
 function confirm_yes -a message
   confirm "$message"
-    or abort
+    or abort "Canceled by user" 2
 end
 
 
