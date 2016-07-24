@@ -9,15 +9,18 @@ set -q OMF_REPO_BRANCH; or set OMF_REPO_BRANCH "master"
 function main
   # Set default settings
   set -q XDG_DATA_HOME
-    and set -g OMF_PATH "$XDG_DATA_HOME/omf"
-    or set -g OMF_PATH "$HOME/.local/share/omf"
+    and set -g OMF_PATH_DEFAULT "$XDG_DATA_HOME/omf"
+    or set -g OMF_PATH_DEFAULT "$HOME/.local/share/omf"
 
   set -q XDG_CONFIG_HOME
     and set -g CONFIG_PATH "$XDG_CONFIG_HOME"
     or set -g CONFIG_PATH "$HOME/.config"
 
-  set -g OMF_CONFIG "$CONFIG_PATH/omf"
+  set -g OMF_CONFIG_DEFAULT "$CONFIG_PATH/omf"
   set -g FISH_CONFIG "$CONFIG_PATH/fish"
+
+  set -g OMF_PATH "$OMF_PATH_DEFAULT"
+  set -g OMF_CONFIG "$OMF_CONFIG_DEFAULT"
 
   # Ensure repository URL ends with .git
   set OMF_REPO_URI (echo $OMF_REPO_URI | command sed 's/\.git//').git
@@ -30,11 +33,11 @@ function main
   Install Oh My Fish
 
 Options:
-  --config=<path>         Put config in a specific path (default is $OMF_CONFIG).
+  --config=<path>         Put config in a specific path (default is $OMF_CONFIG_DEFAULT).
   --help, -h              Show this help message.
   --noninteractive        Disable interactive questions (assume no, use with --yes to assume yes).
   --offline[=<path>]      Offline install, optionally specifying a tar or directory to use.
-  --path=<path>           Use a specific install path (default is $OMF_PATH).
+  --path=<path>           Use a specific install path (default is $OMF_PATH_DEFAULT).
   --uninstall             Uninstall existing installation instead of installing.
   --yes, -y               Assume yes for interactive questions.
 "
@@ -225,19 +228,19 @@ function install_bootstrap
   else if is_version_compatible 2.3.0 (get_fish_version)
     say "Writing bootstrap to $vendor_config_file..."
     command mkdir -p "$FISH_CONFIG/conf.d"
-    generate_bootstrap "$OMF_CONFIG" > "$vendor_config_file"
+    generate_bootstrap > "$vendor_config_file"
 
   # If the user doesn't have their own config file, we'll just use that as our bootstrap.
   else if not test -e "$fish_config_file"
     say "Writing bootstrap to $fish_config_file..."
-    generate_bootstrap "$OMF_CONFIG" > "$fish_config_file"
+    generate_bootstrap > "$fish_config_file"
 
   # Even though config.fish already exists, we can prepend to it if the user is OK with it.
   else if confirm "Would you like Oh My Fish to be added to your configuration automatically?"
     say "Prepending bootstrap to $fish_config_file..."
 
     # Create a temporary file to store the combined config so that we can write atomically.
-    generate_bootstrap "$OMF_CONFIG" | command cat - "$fish_config_file" > "$fish_config_file.tmp"
+    generate_bootstrap | command cat - "$fish_config_file" > "$fish_config_file.tmp"
       or abort "Error prepending config file"
 
     # Swap in the prepended file.
@@ -273,18 +276,27 @@ end
 
 
 # Generates the bootstrap code used to initialize Oh My Fish on shell startup.
-function generate_bootstrap -a config_path
-echo "# Path to Oh My Fish install.
+function generate_bootstrap
+  echo "# Path to Oh My Fish install."
+
+  if test "$OMF_PATH" = "$OMF_PATH_DEFAULT"
+    echo "\
 set -q XDG_DATA_HOME
   and set -gx OMF_PATH \"\$XDG_DATA_HOME/omf\"
-  or set -gx OMF_PATH \"\$HOME/.local/share/omf\"
+  or set -gx OMF_PATH \"\$HOME/.local/share/omf\""
+  else
+    echo "set -gx OMF_PATH '$OMF_PATH'"
+  end
 
+  if test "$OMF_CONFIG" != "$OMF_CONFIG_DEFAULT"
+    echo "
 # Customize Oh My Fish configuration path.
-#set -gx OMF_CONFIG \"$config_path\"
+set -gx OMF_CONFIG '$OMF_CONFIG'"
+  end
 
-# Load oh-my-fish configuration.
-source \$OMF_PATH/init.fish
-"
+  echo "
+# Load Oh My Fish configuration.
+source \$OMF_PATH/init.fish"
 end
 
 

@@ -4,6 +4,7 @@ function omf.destroy -d "Remove Oh My Fish"
   # Trigger uninstall events
   set -l installed_package_path $OMF_PATH/pkg/*
   for pkg in (basename $installed_package_path)
+    omf.packages.run_hook $path uninstall
     emit uninstall_$pkg
   end
 
