@@ -305,21 +305,39 @@ function uninstall_omf
   is_install_dir "$OMF_PATH"
     or abort "No installation detected at $OMF_PATH"
 
-  say "Warning: This will uninstall Oh My Fish and all plugins and themes installed in $OMF_PATH. Your configuration will not be modified. You will need to remove any Oh My Fish startup code from $FISH_CONFIG/config.fish."
+  say (set_color -o red ^ /dev/null)"This will uninstall Oh My Fish and all plugins and themes from $OMF_PATH."(set_color normal ^ /dev/null)
+
+  # If we installed the bootstrap to the user's config, let them know they need to remove it themselves.
+  if begin; test -f "$FISH_CONFIG/config.fish"; and grep -q OMF_PATH "$FISH_CONFIG/config.fish"; end
+    say (set_color -o ^ /dev/null)"Your configuration will not be modified. You may need to remove Oh My Fish startup code from $FISH_CONFIG/config.fish."(set_color normal ^ /dev/null)
+  end
 
   confirm_yes "Are you sure you want to continue?"
   say "Uninstalling from $OMF_PATH..."
 
+  # Trigger package uninstall events
+  for path in $OMF_PATH/pkg/*
+    set -l package (command basename "$path")
+
+    test -f "$path/hooks/uninstall.fish"
+      and source "$path/hooks/uninstall.fish"
+
+    test -f "$path/uninstall.fish"
+      and source "$path/uninstall.fish"
+
+    emit uninstall_$package
+  end
+
   # Remove the core framework
-  command rm -rf "$OMF_PATH/.git"
-    and command rm -r "$OMF_PATH"
+  command rm -rf "$OMF_PATH"
     or abort "Uninstall failed"
 
   # Remove the bootstrap if it is managed by us
   set -l vendor_config_file "$FISH_CONFIG/conf.d/omf.fish"
-  test -e "$vendor_config_file"
-    and command rm "$vendor_config_file"
-    or abort "Failed to remove bootstrap file"
+  if test -e "$vendor_config_file"
+    command rm "$vendor_config_file"
+      or abort "Failed to remove bootstrap file"
+  end
 
   # Restore backed-up files
   restore_backup_file "$FISH_CONFIG/config.fish"
@@ -465,9 +483,9 @@ function abort -a message code
   end
 
   if test -n "$message"
-    printf "%sInstall aborted: $message%s\n" (set_color red ^ /dev/null) (set_color normal ^ /dev/null) >&2
+    printf "%sInstall aborted: $message%s\n" (set_color -o red ^ /dev/null) (set_color normal ^ /dev/null) >&2
   else
-    printf "%sInstall aborted%s\n" (set_color red ^ /dev/null) (set_color normal ^ /dev/null) >&2
+    printf "%sInstall aborted%s\n" (set_color -o red ^ /dev/null) (set_color normal ^ /dev/null) >&2
   end
 
   exit $code
