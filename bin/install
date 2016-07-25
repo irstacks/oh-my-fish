@@ -85,10 +85,14 @@ Options:
 
   # Check if OMF is already installed.
   if test -d "$OMF_PATH"
-    say "Existing installation detected at $OMF_PATH"
+    if is_install_dir "$OMF_PATH"
+      say "Existing installation detected at $OMF_PATH"
 
-    confirm_yes "Would you like to remove the existing installation?"
-    uninstall_omf
+      confirm_yes "Would you like to remove the existing installation?"
+      uninstall_omf
+    else
+      abort "Target directory $OMF_PATH already exists"
+    end
   end
 
   # Begin the install process.
